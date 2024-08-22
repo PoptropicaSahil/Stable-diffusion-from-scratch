@@ -18,3 +18,16 @@ A generative model learns a probability distribution of the data set such that w
 ![alt text](readme-images/training-sampling.png)
 ![alt text](readme-images/overview.png)
 ![alt text](readme-images/classifier-guidance.png)
+
+
+## Group Normalization
+![alt text](readme-images/layer-norm.png) \
+Idea of using group normalization is that because the matrices are subject to pooling, items closer are more likely to be related. So we are normalizing by the groups. <br>
+But main idea ofcourse to not let the loss function oscillate too much --> **Training faster**. 
+
+![alt text](readme-images/group-norm.png)
+
+
+## Need for attention 
+Taken from Jay Alammar's blog. The need for attention is to ensure model understands both text and images' embeddings together and can pay *attention* to similar items in that space.
+![alt text](readme-images/jalammar-attention.jpeg)

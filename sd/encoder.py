@@ -1,14 +1,19 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
-from decoder import VAEAttentionBlock, VAEResidualBlack
+from decoder import VAE_AttentionBlock, VAE_ResidualBlock
 
 
 class VAR_Encoder(nn.Sequential):
     def __init__(self):
         """
-        Idea is to compress the image i.e. reduce the shape, but keep adding more features. 
-        So each pixel carries more information with more features
+        Idea is to compress the image i.e. reduce the shape, but keep adding more features/channels. 
+        So each pixel carries more information with more features.
+        This variational autoencoder not only compresses the image, but also 
+        LEARNS A LATENT SPACE i.e. learns a DISTRIBUTION. 
+
+        Learn the mu, sigma of the latent space.
+        We can then sample from this distribution.
         """
 
         super().__init__(
@@ -73,11 +78,43 @@ class VAR_Encoder(nn.Sequential):
 
     def forward(self, x:torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
         # x: (Batch_Size, Channel, Height, Width)
-        # noise: (Batch_Size, out_Channels, Height/8, Width/8)
+        # noise: (Batch_Size, out_Channels, Height/8, Width/8) 
+        # Shape of noise is same as output of encoder
 
-        for module in self.modules:
+
+        # run all the modules sequentially
+        for module in self:
             if getattr(module, 'stride', None) == (2, 2):
+                # For the conv2d modules having stride = 2, we have already put 0 padding
+                # because default padding is symmetrical in all directions
+                # Instead we (asymmetrically) apply it only to right and bottom
+
                 # (Padding_left, Padding_Right, Padding_Top, Padding_Bottom)
                 x = F.pad(x, (0, 1, 0, 1))
             x = module(x)
+
+        # Output of the Variational Autoencoder is mean and log variance
+        # (Batch_Size, 8 , Height, Height / 8, Width / 8) 
+        # -> two tensors of shape (Batch_Size, 4, Height / 8, Height / 8)
+        mean, log_variance = torch.chunk(inputs = x, chunks = 2, dim = 1)
+
+        # Convert/ Clamp it to this range (useful if it is too small or too large)
+        # (Batch_Size, 4, Height / 8, Height / 8) -> (Batch_Size, 4, Height / 8, Height / 8)
+        log_variance = torch.clamp(input = log_variance, min = -30, max = 20)
+
+        # (Batch_Size, 4, Height / 8, Height / 8)
+        variance = log_variance.exp()
+        
+        # (Batch_Size, 4, Height / 8, Height / 8)
+        std_dev = variance.sqrt()
+
+        # Given noise - N(0, 1) i.e. Z
+        # Given data - N(mean, std_dev) i.e x
+        # Z = (x - mean) / std_dev
+        x = mean + std_dev * noise
+
+        # Scale the output by a constant (as given in the paper and repo)
+        x *= 0.18215
+
+        return x
 
