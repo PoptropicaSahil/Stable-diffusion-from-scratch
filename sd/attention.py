@@ -35,7 +35,30 @@ class SelfAttention(nn.Module):
         weight = q @ k.transpose(-1, -2)
 
         if causal_mask:
+            # Mask where upper triangle is 1s
+            # Always remember we apply mask BEFORE softmax
             mask = torch.ones_like(weight, dtype=torch.bool).triu(1)
+
+            weight.masked_fill(mask, -torch.inf)
+
+        weight /= math.sqrt(self.d_head)
+
+        weight = F.softmax(weight, dim = -1)
+
+        # (Batch_Size, H, Seq_Len, Seq_Len) @ (Batch_Size, H, Seq_Len, Dim / H) -> (Batch_Size, H, Seq_Len, Dim / H)
+        output = weight @ v
+
+        # (Batch_Size, H, Seq_Len, Dim / H) ->  (Batch_Size, Seq_Len, H , Dim / H)
+        output = output.transpose(1, 2)
+
+        output = output.reshape(input_shape)
+
+        output = self.out_proj(output)
+
+        # (Batch_Size, Seq_Len, Dim)
+        return output 
+
+
             
 
 

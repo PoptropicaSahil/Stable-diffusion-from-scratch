@@ -31,3 +31,8 @@ But main idea ofcourse to not let the loss function oscillate too much --> **Tra
 ## Need for attention 
 Taken from Jay Alammar's blog. The need for attention is to ensure model understands both text and images' embeddings together and can pay *attention* to similar items in that space.
 ![alt text](readme-images/jalammar-attention.jpeg)
+
+
+## Coding CLIP
+Looks like an encoder-only model. Check the part on the left for the same. 
+![alt text](readme-images/clip-encoder.png)

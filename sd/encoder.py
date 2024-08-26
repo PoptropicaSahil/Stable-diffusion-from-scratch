@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from decoder import VAE_AttentionBlock, VAE_ResidualBlock
 
 
-class VAR_Encoder(nn.Sequential):
+class VAE_Encoder(nn.Sequential):
     def __init__(self):
         """
         Idea is to compress the image i.e. reduce the shape, but keep adding more features/channels. 
@@ -57,7 +57,7 @@ class VAR_Encoder(nn.Sequential):
             VAE_ResidualBlock(512, 512),
 
             # (Batch_Size, 512, Height/8, Width/8) -> (Batch_Size, 512, Height/8, Width/8)
-            VAEAttentionBlock(512, ),
+            VAE_AttentionBlock(512, ),
 
             # (Batch_Size, 512, Height/8, Width/8) -> (Batch_Size, 512, Height/8, Width/8)
             VAE_ResidualBlock(512, 512),
@@ -91,6 +91,8 @@ class VAR_Encoder(nn.Sequential):
 
                 # (Padding_left, Padding_Right, Padding_Top, Padding_Bottom)
                 x = F.pad(x, (0, 1, 0, 1))
+            
+            # Apply all the modules
             x = module(x)
 
         # Output of the Variational Autoencoder is mean and log variance
@@ -114,6 +116,7 @@ class VAR_Encoder(nn.Sequential):
         x = mean + std_dev * noise
 
         # Scale the output by a constant (as given in the paper and repo)
+        # (Batch_Size, 4, Height / 8, Height / 8)
         x *= 0.18215
 
         return x

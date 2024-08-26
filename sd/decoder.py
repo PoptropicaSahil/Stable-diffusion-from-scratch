@@ -31,8 +31,6 @@ class VAE_AttentionBlock(nn.module):
 
 
 
-
-
 class VAE_ResidualBlock(nn.Module):
     
     def __init__(self, in_channels, out_channels):
@@ -64,4 +62,73 @@ class VAE_ResidualBlock(nn.Module):
         x = F.silu(x)
         x = self.conv_2(x)
         x = x + self.residual_layer(residue) 
+        return x
+    
+
+class VAE_Decoder(nn.Sequential):
+
+    def __init__(self):
+        super().init(
+            nn.Conv2d(in_channels = 4, out_channels = 4, kernel_size = 1, padding=0),
+            
+            nn.Conv2d(in_channels = 4, out_channels = 512, kernel_size = 3, padding = 1),
+
+            VAE_ResidualBlock(in_channels = 512, out_channels = 512),
+            
+            VAE_AttentionBlock(channels = 512),
+
+            VAE_ResidualBlock(in_channels = 512, out_channels = 512),
+            VAE_ResidualBlock(in_channels = 512, out_channels = 512),
+            VAE_ResidualBlock(in_channels = 512, out_channels = 512),
+
+            # (Batch_Size, 512, Height / 8, Width / 8) -> (Batch_Size, 512, Height / 8, Width / 8) 
+            VAE_ResidualBlock(in_channels = 512, out_channels = 512),
+
+            # (Batch_Size, 512, Height / 8, Width / 8) -> (Batch_Size, 512, Height / 4, Width / 4)
+            nn.Upsample(scale_factor = 2),
+
+            nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = 3, padding = 1),
+
+            VAE_ResidualBlock(in_channels = 512, out_channels = 512),
+            VAE_ResidualBlock(in_channels = 512, out_channels = 512),
+            VAE_ResidualBlock(in_channels = 512, out_channels = 512),
+  
+            # (Batch_Size, 512, Height / 4, Width / 4) -> (Batch_Size, 512, Height / 2, Width / 2)
+            nn.Upsample(scale_factor = 2),     
+
+            nn.Conv2d(in_channels = 512, out_channels = 512, kernel_size = 3, padding = 1),
+            
+            VAE_ResidualBlock(in_channels = 512, out_channels = 256),
+            VAE_ResidualBlock(in_channels = 256, out_channels = 256),
+            VAE_ResidualBlock(in_channels = 256, out_channels = 256),
+   
+            # (Batch_Size, 256, Height / 2, Width / 2) -> (Batch_Size, 256, Height, Width)
+            nn.Upsample(scale_factor = 2),  
+
+            nn.Conv2d(in_channels = 256, out_channels = 256, kernel_size = 3, padding = 1),
+
+            VAE_ResidualBlock(in_channels = 256, out_channels = 128),
+            VAE_ResidualBlock(in_channels = 128, out_channels = 128),
+            VAE_ResidualBlock(in_channels = 128, out_channels = 128),
+   
+            # Divide the 128 features (channels) in groups of 32
+            nn.GroupNorm(num_groups = 32, num_channels = 128),
+
+            nn.SiLU(),
+
+            # (Batch_Size, 128, Height, Width) -> (Batch_Size, 3, Height, Width)
+            nn.Conv2d(in_channels = 128, out_channels = 3, kernel_size = 3, padding = 1)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # input to decoder is the latent representation
+        # x: (Batch_Size, 4, Height / 8, Width / 8)
+
+        # Reverse the scaling
+        x /= 0.18215
+
+        for module in self:
+            x = module(x)
+
+        # (Batch_Size, 3, Height, Width)
         return x
