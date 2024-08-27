@@ -36,3 +36,23 @@ Taken from Jay Alammar's blog. The need for attention is to ensure model underst
 ## Coding CLIP
 Looks like an encoder-only model. Check the part on the left for the same. 
 ![alt text](readme-images/clip-encoder.png)
+
+
+## Classifier Free Guidance
+We inference the model **twice** - one by specifying the prompt and another by not specifying it i.e. unconditioned prompt. Then we combine the output of the model linearly - with a weight `cfg_scale` for how much weight to give to the prompt.
+![alt text](readme-images/classifier-free-guidance.png)
+
+## Architecture
+The latents along with the prompt embeddings are run through the UNET multiple times. Objective of the UNET is to predict the amount of noise present in the latent, at a given timestamp, for many timestamps. \
+Then scheduler will 'remove' noise. \ 
+**We should also ensure that while denoising, the outputs remain close to the text prompt.**
+
+
+
+![alt text](readme-images/arch-text-to-img.png)
+
+![alt text](readme-images/arch-img-to-img.png)
+
+## Time Embeddings
+Similar to how earlier we converted positions to vectors (embeddings), now we will convert timestamps to vectors
+![alt text](readme-images/time_embedding.png)

@@ -1,10 +1,9 @@
 import torch
 from torch import nn
-from torch.nn import functional as F
 from attention import SelfAttention
 
-class CLIPEmbedding(nn.Module):
 
+class CLIPEmbedding(nn.Module):
     def __init__(self, n_vocab: int, n_embd: int, n_tokens: int):
         super().__init__()
 
@@ -19,7 +18,6 @@ class CLIPEmbedding(nn.Module):
 
 
 class CLIPLayer(nn.Module):
-    
     def __init__(self, n_head: int, n_embd: int):
         super().__init__()
 
@@ -37,40 +35,33 @@ class CLIPLayer(nn.Module):
 
         # SelfAttention
         x = self.layernorm_1(x)
-        x = self.attention(x, causal_mask = True)
+        x = self.attention(x, causal_mask=True)
         x += residue
 
         residue = x
 
-        # Feedforward 
+        # Feedforward
         x = self.layernorm_2(x)
         x = self.linear_1(x)
-        x = x * torch.sigmoid(1.702 * x) # QuickGELU activation function
+        x = x * torch.sigmoid(1.702 * x)  # QuickGELU activation function
         x = self.linear_2(x)
         x += residue
 
         return x
 
 
-
-
-
-
-
 class CLIP(nn.Module):
-
     # CLIP is seq2seq model so output shape should match input shape
     def __init__(self):
-
         # n_tokens equivalent to max_seq_len
-        self.embedding = CLIPEmbedding(n_vocab = 49408, n_embd = 768, n_tokens = 77)
+        self.embedding = CLIPEmbedding(n_vocab=49408, n_embd=768, n_tokens=77)
 
         self.layers = nn.Module(
-            [CLIPLayer(n_heads = 12, embd_size = 768) for _ in range(12)]
+            [CLIPLayer(n_heads=12, embd_size=768) for _ in range(12)]
         )
 
         self.layernorm = nn.LayerNorm(768)
-    
+
     def forward(self, tokens: torch.LongTensor) -> torch.FloatTensor:
         # check why LongTensor
 
@@ -81,7 +72,7 @@ class CLIP(nn.Module):
 
         for layer in self.layers:
             state = layer(state)
-        
+
         # (Batch_Size, Seq_Len, Dim)
         output = self.layernorm(state)
 

@@ -1,3 +1,4 @@
+from sympy import residue
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -28,7 +29,102 @@ class UNET_ResidualBlock(nn.Module):
         self.conv_feature = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, padding=1)
         self.linear_time = nn.Linear(in_features=n_time, out_features=out_channels)
 
-        self.groupnorm_merged = nn.G
+        self.groupnorm_merged = nn.GroupNorm(num_groups=32, num_channels=out_channels)
+        self.conv_merged = nn.Conv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, padding=1)
+
+        if in_channels == out_channels:
+            self.residual_layer = nn.Identity()
+        else:
+            self.residual_layer = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1, padding=0)
+
+    def forward(self, feature, time):
+        # objective is to relate the time embedding with the latent (feature)
+        # feature: (Batch_Size, in_channels, Height, Width)
+        # time: (1, 1280)
+
+        residue = feature
+        feature = self.groupnorm_feature(feature)
+        feature = F.silu(feature)
+        feature = self.conv_feature(feature)
+
+        time = F.silu(time)
+        time = self.linear_time(time)
+
+        merged = feature + time.unsqueeze(-1).unsqueeze(-1)
+        merged = self.groupnorm_merged(merged)
+        merged = F.silu(merged)
+        merged = self.conv_merged(merged)
+        merged += self.residual_layer(residue)
+
+        return merged
+
+
+class UNET_AttentionBlock(nn.Module):
+    def __init__(self, n_head: int, n_embd: int, d_context = 768):
+        super().__init__()
+        channels = n_head * n_embd
+
+        self.groupnorm = nn.GroupNorm(num_groups=32, num_channels=channels, eps=1e-6)
+        self.conv_input = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=1, padding=0)
+
+        self.layernorm_1 = nn.LayerNorm(channels)
+        self.attention_1 = SelfAttention(n_heads=n_head, d_embed=channels, in_proj_bias=False)
+        self.layernorm_2 = nn.LayerNorm(channels)
+        self.attention_2 = CrossAttention(n_head, channels, d_context, in_proj_bias = False)
+        self.layernorm_3 = nn.LayerNorm(channels)
+        self.linear_geglu_1 = nn.Linear(in_features=channels, out_features=4 * channels * 2)
+        self.linear_geglu_2 = nn.Linear(in_features=4 * channels, out_features=channels)
+
+        self.conv_output = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=1, padding=0)
+
+    def forward(self, x, context):
+        # This is the way it is defined in the actual implementation as well
+        # x: (Batch_Size, Features, Height, Width)
+        # context: (Batch_Size, Seq_Len, Dim)
+
+        residue_long = x
+        x = self.groupnorm(x)
+        x = self.conv_input(x)
+
+        n, c, h, w = x.shape
+
+        # (Batch_Size, Features, Height, Width) -> (Batch_Size, Features, Height * Width)
+        x = x.view((n, c, h*w))
+
+        # (Batch_Size, Features, Height * Width) -> (Batch_Size, Height * Width, Features)
+        x = x.transpose(-1, -2)
+
+        # Normalisation + SelfAttention with skip connection
+        residue_short = x
+        x = self.layernorm_1(x)
+        self.attention_1(x) # SelfAttention
+        x += residue_short
+
+        # Normalisation + CrossAttention with skip connection
+        x = self.layernorm_2(x)
+        self.attention_2(x, context) # CrossAttention
+        x += residue_short
+
+        # Normalisation + FF with GeGLU and skip connection
+        residue_short = x
+        x = self.layernorm_3(x)
+        x, gate = self.linear_geglu_1(x).chunk(2, dim = -1)
+        x = x * F.gelu(gate)
+        x = self.linear_geglu_2(x)
+        x += residue_short
+
+        # (Batch_Size, Height * Width, Features) -> (Batch_Size, Features, Height * Width ) 
+        x = x.transpose(-1, -2)
+        x = x.view((n, c, h, w))
+
+        x = self.conv_output(x) + residue_long
+
+        return x
+
+
+
+
+
 
 
 class Upsample(nn.Module):
