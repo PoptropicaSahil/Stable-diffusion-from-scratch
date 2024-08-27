@@ -43,16 +43,21 @@ We inference the model **twice** - one by specifying the prompt and another by n
 ![alt text](readme-images/classifier-free-guidance.png)
 
 ## Architecture
-The latents along with the prompt embeddings are run through the UNET multiple times. Objective of the UNET is to predict the amount of noise present in the latent, at a given timestamp, for many timestamps. \
+The latents along with the prompt embeddings are run through the UNET multiple times. Objective of the UNET is to predict the amount of noise present in the latent, at a given timestamp, for many timestamps. 
+
 Then scheduler will 'remove' noise. \ 
 **We should also ensure that while denoising, the outputs remain close to the text prompt.**
 
-
+> Note: *Scheduler* in the images below corresponds to ddpm *Sampler* in the code
 
 ![alt text](readme-images/arch-text-to-img.png)
-
 ![alt text](readme-images/arch-img-to-img.png)
 
 ## Time Embeddings
 Similar to how earlier we converted positions to vectors (embeddings), now we will convert timestamps to vectors
 ![alt text](readme-images/time_embedding.png)
+
+
+## Beta parameter in Scheduler
+Beta is a series of numbers (hence, schedule) that indicate the **variance** of noise added to the data
+![alt text](readme-images/beta-parameter.png)

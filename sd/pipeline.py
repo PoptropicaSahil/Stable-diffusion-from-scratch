@@ -2,7 +2,6 @@ import torch
 import numpy as np
 from sd.ddpm import DDPMSampler
 from tqdm import tqdm
-import numpy as np
 
 # Stable diffusion can only images of size 512 x 512
 WIDTH = 512
@@ -16,32 +15,32 @@ LATENTS_HEIGHT = HEIGHT // 8
 
 def generate(
     prompt: str,
-    uncond_prompt: str, # Negative prompt or empty string
+    uncond_prompt: str,  # Negative prompt or empty string
     input_image: None,
-    strength = 0.8, # Between 0 to 1 - how much noise to add. Controls how much attention paid to input image to generate output image. More strength -> more noise added to latent -> more creative model
-    do_cfg = True, # classifier free guidance
-    cfg_scale = 7.5, # ranges between 1 to 14 (check!)
-    sampler_name = "ddpm",
-    n_inference_steps = 50, # usually about 50 steps are good enough for ddpm sampler
-    models = {},
-    seed = None,
-    device = None,
-    idle_device = None,
-    tokenizer = None
+    strength=0.8,  # Between 0 to 1 - how much noise to add. Controls how much attention paid to input image to generate output image. More strength -> more noise added to latent -> more creative model
+    do_cfg=True,  # classifier free guidance
+    cfg_scale=7.5,  # ranges between 1 to 14 (check!)
+    sampler_name="ddpm",
+    n_inference_steps=50,  # usually about 50 steps are good enough for ddpm sampler
+    models={},
+    seed=None,
+    device=None,
+    idle_device=None,
+    tokenizer=None,
 ):
     # uncond_prompt is the negative prompt - from which we want to 'go away'
 
     with torch.no_grad():
         if not (0 < strength <= 1):
             raise ValueError("strength must be between 0 and 1")
-        
+
         if idle_device:
-            to_idle= lambda x: x.to(idle_device)
+            to_idle = lambda x: x.to(idle_device)
         else:
-            to_idle= lambda x: x
-        
+            to_idle = lambda x: x
+
         # generator is as good as random number generator
-        generator = torch.Generator(device = device)
+        generator = torch.Generator(device=device)
         if seed is None:
             generate.seed()
         else:
@@ -54,15 +53,19 @@ def generate(
             # we have to pass through the model twice, with and without prompt (context)
 
             # Convert the prompt into tokens using the tokenizer
-            cond_tokens = tokenizer.batch_encode_plus([prompt], padding = "max_length", max_length = 77).input_ids
+            cond_tokens = tokenizer.batch_encode_plus(
+                [prompt], padding="max_length", max_length=77
+            ).input_ids
 
             # (Batch_Size, Seq_Len)
-            cond_tokens = torch.tensor(cond_tokens, dtype = torch.long, device = device)
+            cond_tokens = torch.tensor(cond_tokens, dtype=torch.long, device=device)
 
             # (Batch_Size, Seq_Len) -> (Batch_Size, Seq_Len, Dim)
-            cond_context = clip(cond_tokens) 
+            cond_context = clip(cond_tokens)
 
-            uncond_tokens = tokenizer.batch_encode_plus([uncond_prompt], padding = "max_length", max_length = 77).input_ids
+            uncond_tokens = tokenizer.batch_encode_plus(
+                [uncond_prompt], padding="max_length", max_length=77
+            ).input_ids
             uncond_tokens = torch.tensor(uncond_tokens, dtype=torch.long, device=device)
             uncond_context = clip(uncond_tokens)  # (Batch_Size, Seq_Len, Dim)
 
@@ -73,24 +76,24 @@ def generate(
         else:
             # no classifier free guidance, so no uncond_prompt
             # Convert it to list of tokens
-            tokens = tokenizer.batch_encode_plus([prompt], padding = "max_length", max_length =77).input_ids
-            tokens = torch.tensor(tokens, dtype = torch.long, device=device)
+            tokens = tokenizer.batch_encode_plus(
+                [prompt], padding="max_length", max_length=77
+            ).input_ids
+            tokens = torch.tensor(tokens, dtype=torch.long, device=device)
 
-            context = clip(tokens) # (Batch_Size, Seq_Len, Dim) = (1, 77, 768)
-        
+            context = clip(tokens)  # (Batch_Size, Seq_Len, Dim) = (1, 77, 768)
+
         to_idle(clip)
 
         if sampler_name.lower().trim() == "ddpm":
             sampler = DDPMSampler(generator)
-            sampler.set_inference_steps(n_inference_steps)
+            sampler.set_inference_timestamps(num_inference_steps=n_inference_steps)
         else:
             raise ValueError(f"Unknown sampler {sampler_name}, please choose ddpm only")
-        
+
         latents_shape = (1, 4, LATENTS_HEIGHT, LATENTS_WIDTH)
 
-    
-
-    if input_image: 
+    if input_image:
         # for image to image case
         # we pass through encoder, get latent, and add noise to it
         # then scheduler will 'remove' noise
@@ -102,34 +105,36 @@ def generate(
         input_image_tensor = np.array(input_image_tensor)
 
         # (HEIGHT, WIDTH, Channels = 3)
-        input_image_tensor = torch.tensor(input_image_tensor, dtype = torch.float32)
+        input_image_tensor = torch.tensor(input_image_tensor, dtype=torch.float32)
         input_image_tensor = rescale(input_image_tensor, (0, 255), (-1, 1))
 
-        # (Height, Width, Channels) -> (Batch_Size = 1, Height, Width, Channels) 
+        # (Height, Width, Channels) -> (Batch_Size = 1, Height, Width, Channels)
         input_image_tensor = input_image_tensor.unsqueeze(0)
 
         # Convert to shape as taken by encoder
-        # (Batch_Size = 1, Height, Width, Channels) -> (Batch_Size = 1, Channels, Height, Width) 
+        # (Batch_Size = 1, Height, Width, Channels) -> (Batch_Size = 1, Channels, Height, Width)
         input_image_tensor = input_image_tensor.permute(0, 3, 1, 2)
 
         # Sample some noise (encoder needs noise in its forward pass)
-        encoder_noise = torch.randn(size = latents_shape, generator=generator, device=device)
+        encoder_noise = torch.randn(
+            size=latents_shape, generator=generator, device=device
+        )
 
-        # Run through VAE_Encoder 
+        # Run through VAE_Encoder
         latents = encoder(input_image_tensor, encoder_noise)
 
         # ************** IMP ***************
         # Now we have to add noise TO THIS latent
-        sampler.set_strength(strength = strength)
+        sampler.set_strength(strength=strength)
         latents = sampler.add_noise(latents, sampler.timesteps[0])
 
         # Encoder's part is done, we now shift it to the idle device
         # OP only!!
         to_idle(encoder)
     else:
-        # if no input image is passed, it is text to image. 
+        # if no input image is passed, it is text to image.
         # We start with random noise then. N(0, 1)
-        latents = torch.randn(size = latents_shape, generator=generator, device=device)
+        latents = torch.randn(size=latents_shape, generator=generator, device=device)
 
     diffusion = models["diffusion"]
     diffusion.to(device)
@@ -142,14 +147,13 @@ def generate(
         # UNET sees the *latent* and predicts how much noise is present
         # Scheduler removes that noise and UNET predicts noise in the remaining image
         # We do this 'sampler.timesteps' times
-        
+
         # get_time_embedding converts timestep number to vector
         # (1, 320)
         time_embedding = get_time_embedding(timestep).to(device)
 
         # (Batch_Size, 4, Height_Latent, Width_Latent)
         model_input = latents
-
 
         if do_cfg:
             # we have to pass through the model twice, with and without prompt (context), so we repeat
@@ -179,7 +183,7 @@ def generate(
     to_idle(decoder)
 
     # Invert the rescaling of image done earlier
-    images = rescale(images, (-1, 1), (0, 255), clamp = True)
+    images = rescale(images, (-1, 1), (0, 255), clamp=True)
 
     # To see image on CPU, Channel dimension should be last apparently
     # (Batch_Size, Channel, Height, Width) -> (Batch_Size, Height, Width, Channel)
@@ -214,14 +218,9 @@ def get_time_embedding(timestep):
     freqs = torch.pow(10000, -torch.range(start=0, end=160, dtype=torch.float32) / 160)
 
     # like unsequeeze dimension
-    x = torch.tensor([timestep], dtype = torch.float32)[:, None] * freqs[None]
+    x = torch.tensor([timestep], dtype=torch.float32)[:, None] * freqs[None]
 
     # (1, 320)
-    output = torch.cat([torch.cos(x), torch.sin(x)], dim = -1)
+    output = torch.cat([torch.cos(x), torch.sin(x)], dim=-1)
 
     return output
-
-
-
-
-
