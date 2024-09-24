@@ -98,7 +98,7 @@ class VAE_Encoder(nn.Sequential):
         # Output of the Variational Autoencoder is mean and log variance
         # (Batch_Size, 8 , Height, Height / 8, Width / 8) 
         # -> two tensors of shape (Batch_Size, 4, Height / 8, Height / 8)
-        mean, log_variance = torch.chunk(inputs = x, chunks = 2, dim = 1)
+        mean, log_variance = torch.chunk(input = x, chunks = 2, dim = 1)
 
         # Convert/ Clamp it to this range (useful if it is too small or too large)
         # (Batch_Size, 4, Height / 8, Height / 8) -> (Batch_Size, 4, Height / 8, Height / 8)

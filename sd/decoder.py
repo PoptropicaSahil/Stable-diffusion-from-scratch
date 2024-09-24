@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from attention import SelfAttention
 
 
-class VAE_AttentionBlock(nn.module):
+class VAE_AttentionBlock(nn.Module):
     
     def __init__(self, channels: int):
         super().__init__()
@@ -16,6 +16,9 @@ class VAE_AttentionBlock(nn.module):
         # channels <==> features
 
         residue = x
+
+        # (Batch_Size, channels, Height, Width) -> (Batch_Size, channels, Height, Width
+        x = self.groupnorm(x)
         
         n, c, h, w = x.shape
 
@@ -25,8 +28,20 @@ class VAE_AttentionBlock(nn.module):
         # (Batch_Size, channels, Height * Width) -> (Batch_Size, Height * Width, channels)
         x = x.transpose(-1, -2)
 
-        # (Batch_Size, Height * Width, channels) -> (Batch_Size, channels, Height, Width)
+        # Self attention without mask
+        # (Batch_Size, Height * Width, channels) -> (Batch_Size, Height * Width, channels)
+        x = self.attention(x)
+
+        # (Batch_Size, Height * Width, channels) -> (Batch_Size, channels, Height * Width)
+        x = x.transpose(-1, -2)
+
+        # (Batch_Size, channels, Height * Width) -> (Batch_Size, channels, Height, Width)
         x = x.view((n, c, h, w))
+
+        # (Batch_Size, channels, Height, Width)
+        x += residue
+
+        return x
 
 
 
@@ -38,7 +53,7 @@ class VAE_ResidualBlock(nn.Module):
         self.groupnorm_1 = nn.GroupNorm(num_groups=32, num_channels=in_channels)
         self.conv_1 = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, padding=1)
 
-        self.groupnorm_2 = nn.GroupNorm(num_groups=32, out_channels=out_channels)
+        self.groupnorm_2 = nn.GroupNorm(num_groups=32, num_channels=out_channels)
         self.conv_2 = nn.Conv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, padding=1)
 
         if in_channels == out_channels:
@@ -68,7 +83,7 @@ class VAE_ResidualBlock(nn.Module):
 class VAE_Decoder(nn.Sequential):
 
     def __init__(self):
-        super().init(
+        super().__init__(
             nn.Conv2d(in_channels = 4, out_channels = 4, kernel_size = 1, padding=0),
             
             nn.Conv2d(in_channels = 4, out_channels = 512, kernel_size = 3, padding = 1),

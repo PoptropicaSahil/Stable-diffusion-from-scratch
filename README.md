@@ -83,3 +83,19 @@ Similar to how earlier we converted positions to vectors (embeddings), now we wi
 ## Beta parameter in Scheduler
 Beta is a series of numbers (hence, schedule) that indicate the **variance** of noise added to the data
 ![alt text](readme-images/beta-parameter.png)
+
+
+## Adding noise to image
+Note the mean and variance of noise. This formula is especially helpful because we can get noisy version at any timestep t from  given image at timestep 0
+![alt text](readme-images/sample-noise.png)
+
+
+## Removing noise from image
+Use formula as given in paper. 
+Latents is $x_{t}$, Noise predicted by unet is $\epsilon_{\theta}$
+![alt text](readme-images/de-noise.png)
+
+**More info**: We need some more formulae from the paper to compute the steps in the ddpm scheduler. 
+![alt text](readme-images/de-noise-2.png)
+![alt text](readme-images/de-noise-3.png)
+

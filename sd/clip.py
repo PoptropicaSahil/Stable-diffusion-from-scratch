@@ -36,13 +36,16 @@ class CLIPLayer(nn.Module):
         # SelfAttention
         x = self.layernorm_1(x)
         x = self.attention(x, causal_mask=True)
+        x = self.attention(x, causal_mask=True)
         x += residue
 
         residue = x
 
         # Feedforward
+        # Feedforward
         x = self.layernorm_2(x)
         x = self.linear_1(x)
+        x = x * torch.sigmoid(1.702 * x)  # QuickGELU activation function
         x = x * torch.sigmoid(1.702 * x)  # QuickGELU activation function
         x = self.linear_2(x)
         x += residue
@@ -55,6 +58,7 @@ class CLIP(nn.Module):
     def __init__(self):
         # n_tokens equivalent to max_seq_len
         self.embedding = CLIPEmbedding(n_vocab=49408, n_embd=768, n_tokens=77)
+        self.embedding = CLIPEmbedding(n_vocab=49408, n_embd=768, n_tokens=77)
 
         self.layers = nn.Module(
             [CLIPLayer(n_heads=12, embd_size=768) for _ in range(12)]
@@ -62,10 +66,11 @@ class CLIP(nn.Module):
 
         self.layernorm = nn.LayerNorm(768)
 
+
     def forward(self, tokens: torch.LongTensor) -> torch.FloatTensor:
         # check why LongTensor
 
-        tokens = tokens.type(torch.long)
+        tokens = tokens.type(torch.long)  # type: ignore
 
         # (Batch_Size, Seq_Len) -> (Batch_Size, Seq_Len, Dim)
         state = self.embedding(tokens)
@@ -73,7 +78,9 @@ class CLIP(nn.Module):
         for layer in self.layers:
             state = layer(state)
 
+
         # (Batch_Size, Seq_Len, Dim)
         output = self.layernorm(state)
 
         return output
+
