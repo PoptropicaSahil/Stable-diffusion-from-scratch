@@ -14,6 +14,11 @@ class VAE_Encoder(nn.Sequential):
 
         Learn the mu, sigma of the latent space.
         We can then sample from this distribution.
+
+        Why only these are the shapes and dimensions that are passed around - mostly historical reasons. 
+        People working on this problem might have seen similar shapes and blocks working well 
+        for similar analogous problems. So they didn't change much and continues with earlier ones. 
+
         """
 
         super().__init__(
@@ -96,7 +101,7 @@ class VAE_Encoder(nn.Sequential):
             x = module(x)
 
         # Output of the Variational Autoencoder is mean and log variance
-        # (Batch_Size, 8 , Height, Height / 8, Width / 8) 
+        # (Batch_Size, 8, Height / 8, Width / 8) 
         # -> two tensors of shape (Batch_Size, 4, Height / 8, Height / 8)
         mean, log_variance = torch.chunk(input = x, chunks = 2, dim = 1)
 
@@ -110,6 +115,7 @@ class VAE_Encoder(nn.Sequential):
         # (Batch_Size, 4, Height / 8, Height / 8)
         std_dev = variance.sqrt()
 
+        # Add noise to latent step
         # Given noise - N(0, 1) i.e. Z
         # Given data - N(mean, std_dev) i.e x
         # Z = (x - mean) / std_dev

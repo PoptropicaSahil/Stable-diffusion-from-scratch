@@ -1,4 +1,3 @@
-from sympy import sequence
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -10,6 +9,7 @@ class SelfAttention(nn.Module):
         super().__init__()
         # usually embeddings capture information about the 'token'
         # here, the features/channels for a pixel capture that information
+        # d_embd <==> channels
 
         self.in_proj = nn.Linear(d_embed, 3 * d_embed, bias = in_proj_bias)
         self.out_bias = nn.Linear(d_embed, d_embed, bias = out_proj_bias)
@@ -18,6 +18,7 @@ class SelfAttention(nn.Module):
 
     def forward(self, x: torch.Tensor, causal_mask = False):
         # x: (Batch_Size, Seq_len, Dim)
+        # Coming from to x: (Batch_Size, Height * Width, channels)
 
         input_shape = x.shape
         batch_size, sequence_length, d_embed = input_shape

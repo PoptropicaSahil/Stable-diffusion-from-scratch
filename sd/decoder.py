@@ -9,7 +9,7 @@ class VAE_AttentionBlock(nn.Module):
     def __init__(self, channels: int):
         super().__init__()
         self.groupnorm = nn.GroupNorm(num_groups = 32, num_channels=channels)
-        self.attention = SelfAttention(1, channels)
+        self.selfattention = SelfAttention(1, channels)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (Batch_Size, channels, Height, Width)
@@ -17,7 +17,7 @@ class VAE_AttentionBlock(nn.Module):
 
         residue = x
 
-        # (Batch_Size, channels, Height, Width) -> (Batch_Size, channels, Height, Width
+        # (Batch_Size, channels, Height, Width) -> (Batch_Size, channels, Height, Width)
         x = self.groupnorm(x)
         
         n, c, h, w = x.shape
@@ -26,11 +26,15 @@ class VAE_AttentionBlock(nn.Module):
         x = x.view(n, c, h*w)
 
         # (Batch_Size, channels, Height * Width) -> (Batch_Size, Height * Width, channels)
+        # Usual attention is like calculating attention b/w each tokens (now pixels h*w)
+        # Each token has its own embedding (now channels <==> features)
+        # So we are relating pixels to each other
         x = x.transpose(-1, -2)
 
         # Self attention without mask
+        # Self attention because Q, K, V all come from same input
         # (Batch_Size, Height * Width, channels) -> (Batch_Size, Height * Width, channels)
-        x = self.attention(x)
+        x = self.selfattention(x)
 
         # (Batch_Size, Height * Width, channels) -> (Batch_Size, channels, Height * Width)
         x = x.transpose(-1, -2)
@@ -59,7 +63,7 @@ class VAE_ResidualBlock(nn.Module):
         if in_channels == out_channels:
             self.residual_layer = nn.Identity()
         else:
-            # to ensure same shape while adding
+            # to ensure same shape while adding the residue
             self.residual_layer = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1, padding=0)
 
     
@@ -69,7 +73,7 @@ class VAE_ResidualBlock(nn.Module):
         residue = x
 
         # None of the operations change shape of x
-        # L_out = [(L_in−K+2P)/S]+1  --> [(H - 3 + 2*1)/1] + 1 --> H
+        # L_out = [(L_in − K + 2P) / S] + 1  --> [(H - 3 + 2*1)/1] + 1 --> H
         x = self.groupnorm_1(x)
         x = F.silu(x)
         x = self.conv_1(x)

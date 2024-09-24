@@ -50,7 +50,7 @@ We inference the model **twice** - one by specifying the prompt and another by n
 ![alt text](readme-images/classifier-free-guidance.png)
 
 ## Architecture
-The latents (`Z`) along with the `Prompt Embeddings`, and `Time Embeddings` are run through the UNET multiple times. Objective of the UNET is to predict the amount of noise present in the latent, at a given timestamp, for many timestamps. 
+The latents (`Z`) along with the `Prompt Embeddings`, and `Time Embeddings` are run through the UNET multiple times. Objective of the UNET is to predict the amount of noise present in the latent, at a given timestamp, for many timestamps. The UNET keeps reducing the size of the input, and keeps increasing the number of features (so each pixel *captures more data*).
 > Compare with Jay Alammar's image now!
 
 Then scheduler will 'remove' noise. \ 
