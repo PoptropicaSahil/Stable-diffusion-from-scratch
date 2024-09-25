@@ -1,15 +1,19 @@
-from sympy import residue
 import torch
 from torch import nn
 from torch.nn import functional as F
 from attention import SelfAttention, CrossAttention
 
 class TimeEmbedding(nn.Module):
+    """ Encodes info about the timestamp where we are
+    
+    The timestamp is given as a vector of size 320.
+    Transformers used position index - multiplied by sines cosines and converted to vector
+    That worked well so stable diffusion authors went with similar approach"""
 
     def __init__(self, n_embd: int):
         super().__init__()
         self.linear_1 = nn.Linear(n_embd, 4 * n_embd)
-        self.linear_2 = nn.Linear = nn.Linear(4 * n_embd, 4 * n_embd)
+        self.linear_2 = nn.Linear(4 * n_embd, 4 * n_embd)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (1, 320)
@@ -50,7 +54,10 @@ class UNET_ResidualBlock(nn.Module):
         time = F.silu(time)
         time = self.linear_time(time)
 
+        # Two unsqueeze to match the dimensions while adding 
+        # (1, 1280) -> (1, 1280, -1, -1)
         merged = feature + time.unsqueeze(-1).unsqueeze(-1)
+
         merged = self.groupnorm_merged(merged)
         merged = F.silu(merged)
         merged = self.conv_merged(merged)
@@ -108,6 +115,8 @@ class UNET_AttentionBlock(nn.Module):
         # Normalisation + FF with GeGLU and skip connection
         residue_short = x
         x = self.layernorm_3(x)
+
+        # This code is exactly how was done in original implementation
         x, gate = self.linear_geglu_1(x).chunk(2, dim = -1)
         x = x * F.gelu(gate)
         x = self.linear_geglu_2(x)
@@ -123,10 +132,6 @@ class UNET_AttentionBlock(nn.Module):
 
 
 
-
-
-
-
 class Upsample(nn.Module):
 
     def __init__(self, channels: int):
@@ -138,7 +143,8 @@ class Upsample(nn.Module):
 
         # (Batch_Size, features, Height, Width) -> (Batch_Size, features, Height * 2, Width * 2)
         x = F.interpolate(x, scale_factor=2, mode = 'nearest')
-        return self.conv(x)
+        x = self.conv(x)
+        return x
 
 
 
@@ -160,19 +166,23 @@ class SwitchSequential(nn.Sequential):
 
 
 class UNET(nn.Module):
-    
+    """This code is taken from a repo which initially implemented UNET in TensorFlow"""
     def __init__(self):
         super().__init__()
         # We model unet as encoder(reduce size, increase features) - decoder (opposite)
 
         self.encoders = nn.ModuleList([
-            # SwitchSequential is equivalent to Sequential only
+            # SwitchSequential is equivalent to Sequential only, just that it checks which 
+            # block exactly to apply
+
+            # NOTE: Increasing features
             # (Batch_Size, 4, Height / 8, Width / 8) -> (Batch_Size, 320, Height / 8, Width / 8)
             SwitchSequential(nn.Conv2d(4, 320, kernel_size = 3, padding = 1)),
             
             SwitchSequential(UNET_ResidualBlock(320, 320), UNET_AttentionBlock(8, 40)),
             SwitchSequential(UNET_ResidualBlock(320, 320), UNET_AttentionBlock(8, 40)),
             
+            # NOTE: Reducing Size
             # (Batch_Size, 320, Height / 8, Width / 8) -> (Batch_Size, 320, Height / 16, Width / 16)
             SwitchSequential(nn.Conv2d(320, 320, kernel_size = 3, padding = 1, stride = 2)),
 
@@ -201,8 +211,10 @@ class UNET(nn.Module):
 
         self.decoders = nn.ModuleList([
             # (Batch_Size, 2560, Height / 64, Width / 64) -> (Batch_Size, 1280, Height / 64, Width / 64)
+            
             # Output of Residual Block is 1280 (goes directly to decoder)
             # Output of encoder is also 1280 (skip connection to decoder)
+            # Both together make 2560
             SwitchSequential(UNET_ResidualBlock(2560, 1280)), 
             
             SwitchSequential(UNET_ResidualBlock(2560, 1280)), 
@@ -215,17 +227,22 @@ class UNET(nn.Module):
             SwitchSequential(UNET_ResidualBlock(1280, 640), UNET_AttentionBlock(8, 80)),
             SwitchSequential(UNET_ResidualBlock(940, 640), UNET_AttentionBlock(8, 80)),
 
-            SwitchSequential(UNET_ResidualBlock(940, 640), UNET_AttentionBlock(8, 160), Upsample(640)),
+            SwitchSequential(UNET_ResidualBlock(940, 640), UNET_AttentionBlock(8, 80), Upsample(640)),
 
-            SwitchSequential(UNET_ResidualBlock(940, 320), UNET_AttentionBlock(8, 80)),
+            SwitchSequential(UNET_ResidualBlock(940, 320), UNET_AttentionBlock(8, 40)),
             SwitchSequential(UNET_ResidualBlock(640, 320), UNET_AttentionBlock(8, 80)),
-            SwitchSequential(UNET_ResidualBlock(640, 320), UNET_AttentionBlock(8, 80)),
+            SwitchSequential(UNET_ResidualBlock(640, 320), UNET_AttentionBlock(8, 40)),
             # output dimension (Batch, 320, Height / 8, Width / 8)
             # Check forward of Diffusion
         ])
 
 
 class UNET_OutputLayer(nn.Module):
+    """Job is to convert output of UNET to same size as the input
+    NOTE: UNET in stable diffusion is not exactly same as original UNET wrt dimensions
+    UNET outputs with 320 features
+    This OutputLayer converts back to 4 features"""
+
     def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
         self.groupnorm = nn.GroupNorm(num_groups=32, num_channels=in_channels)

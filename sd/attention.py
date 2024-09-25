@@ -82,7 +82,7 @@ class CrossAttention(nn.Module):
 
     def forward(self, x: torch.Tensor, y):
         # x: (latent): (Batch_Size, Seq_Len_Q, Dim_Q)
-        # y: (context): (Batch_Size, Seq_Len_KV, Dim_KV) = (Batch_Size, 7, 768)
+        # y: (context): (Batch_Size, Seq_Len_KV, Dim_KV) = (Batch_Size, 77, 768)
 
         input_shape = x.shape
         batch_size, sequence_length, d_embed = input_shape
@@ -98,6 +98,7 @@ class CrossAttention(nn.Module):
         v = self.v_proj(y)
 
         # (Batch_Size, Seq_Len, Dim) -> (Batch_Size, Seq_Len, H, d_head) -> (Batch_Size, H, Seq_Len, d_head)
+        # NOTE: Again, observe beauty of transpose
         q = q.view(interim_shape).transpose(1, 2)
         k = k.view(interim_shape).transpose(1, 2)
         v = v.view(interim_shape).transpose(1, 2)
@@ -106,7 +107,7 @@ class CrossAttention(nn.Module):
         weight = q @ k.transpose(-1, -2)
         weight /= math.sqrt(self.d_head)
 
-        # no causal mask because we are relating the prompt with the pixels. Anything in the prompt is allowed to see anything in the pixels
+        # NOTE: no causal mask in cross attention because we are relating the prompt with the pixels. Anything in the prompt is allowed to see anything in the pixels
         weight = F.softmax(weight, dim = -1)
 
         output = weight @ v

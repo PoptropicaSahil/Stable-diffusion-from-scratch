@@ -1,9 +1,9 @@
 import torch
 import numpy as np
-from sd.ddpm import DDPMSampler
+from ddpm import DDPMSampler
 from tqdm import tqdm
 
-# Stable diffusion can only images of size 512 x 512
+# Stable diffusion can only produce images of size 512 x 512
 WIDTH = 512
 HEIGHT = 512
 
@@ -13,16 +13,17 @@ LATENTS_HEIGHT = HEIGHT // 8
 # LATENTS_CHANNELS = 4  # always fixed 4 channels
 
 
+"""This is the main function that will allow us to generate ourputs"""
 def generate(
     prompt: str,
     uncond_prompt: str,  # Negative prompt or empty string
-    input_image: None,
+    input_image: None, # incase we are building image to image
     strength=0.8,  # Between 0 to 1 - how much noise to add. Controls how much attention paid to input image to generate output image. More strength -> more noise added to latent -> more creative model
-    do_cfg=True,  # classifier free guidance
+    do_cfg=True,  # classifier free guidance. If yes, then we will generate two outputs - with and without the prompt
     cfg_scale=7.5,  # ranges between 1 to 14 (check!)
-    sampler_name="ddpm",
+    sampler_name="ddpm", # we have only one sampler ddpm!
     n_inference_steps=50,  # usually about 50 steps are good enough for ddpm sampler
-    models={},
+    models={}, # dict with all models
     seed=None,
     device=None,
     idle_device=None,
@@ -35,9 +36,9 @@ def generate(
             raise ValueError("strength must be between 0 and 1")
 
         if idle_device:
-            to_idle = lambda x: x.to(idle_device)
+            to_idle = lambda x: x.to(idle_device)  # noqa: E731
         else:
-            to_idle = lambda x: x
+            to_idle = lambda x: x  # noqa: E731
 
         # generator is as good as random number generator
         generator = torch.Generator(device=device)
@@ -46,6 +47,7 @@ def generate(
         else:
             generator.manual_seed(seed)
 
+        # Need to get text embeddings - use CLIP - onload CLIP to device
         clip = models["clip"]
         clip.to(device)
 
@@ -60,9 +62,11 @@ def generate(
             # (Batch_Size, Seq_Len)
             cond_tokens = torch.tensor(cond_tokens, dtype=torch.long, device=device)
 
+            # Get embds of the tokens
             # (Batch_Size, Seq_Len) -> (Batch_Size, Seq_Len, Dim)
             cond_context = clip(cond_tokens)
 
+            # Same process for uncond_tokens
             uncond_tokens = tokenizer.batch_encode_plus(
                 [uncond_prompt], padding="max_length", max_length=77
             ).input_ids
@@ -80,18 +84,23 @@ def generate(
                 [prompt], padding="max_length", max_length=77
             ).input_ids
             tokens = torch.tensor(tokens, dtype=torch.long, device=device)
+            
+            # (Batch_Size, Seq_Len, Dim) == (1, 77, 768)
+            context = clip(tokens)  
 
-            context = clip(tokens)  # (Batch_Size, Seq_Len, Dim) = (1, 77, 768)
-
+        # CLIP's work over, offload from device
         to_idle(clip)
 
         if sampler_name.lower().trim() == "ddpm":
             sampler = DDPMSampler(generator)
+            
+            # n_inference_steps will be much lesser than that while training
             sampler.set_inference_timestamps(num_inference_steps=n_inference_steps)
         else:
             raise ValueError(f"Unknown sampler {sampler_name}, please choose ddpm only")
 
         latents_shape = (1, 4, LATENTS_HEIGHT, LATENTS_WIDTH)
+
 
     if input_image:
         # for image to image case
@@ -106,26 +115,30 @@ def generate(
 
         # (HEIGHT, WIDTH, Channels = 3)
         input_image_tensor = torch.tensor(input_image_tensor, dtype=torch.float32)
+        # Input image will have values (0, 255), UNET needs it in (-1, 1)
         input_image_tensor = rescale(input_image_tensor, (0, 255), (-1, 1))
 
         # (Height, Width, Channels) -> (Batch_Size = 1, Height, Width, Channels)
         input_image_tensor = input_image_tensor.unsqueeze(0)
 
-        # Convert to shape as taken by encoder
+        # Convert to shape as taken by VAE encoder
         # (Batch_Size = 1, Height, Width, Channels) -> (Batch_Size = 1, Channels, Height, Width)
         input_image_tensor = input_image_tensor.permute(0, 3, 1, 2)
 
-        # Sample some noise (encoder needs noise in its forward pass)
+        # Sample some GAUSSIAN noise (encoder needs noise in its forward pass)
         encoder_noise = torch.randn(
             size=latents_shape, generator=generator, device=device
         )
 
         # Run through VAE_Encoder
+        # Forward of VAE_Encoder takes input image and noise as expected
+        # Only image is encoded, the noise is added in the end
         latents = encoder(input_image_tensor, encoder_noise)
 
+
         # ************** IMP ***************
-        # Now we have to add noise TO THIS latent
-        sampler.set_strength(strength=strength)
+        # NOTE: Now we have to add noise TO THIS latent
+        sampler.set_strength(strength=strength) # this sets up the timestep scheduler
         latents = sampler.add_noise(latents, sampler.timesteps[0])
 
         # Encoder's part is done, we now shift it to the idle device
@@ -133,20 +146,25 @@ def generate(
         to_idle(encoder)
     else:
         # if no input image is passed, it is text to image.
-        # We start with random noise then. N(0, 1)
+        # We start with random GAUSSIAN noise then. N(0, 1)
         latents = torch.randn(size=latents_shape, generator=generator, device=device)
 
     diffusion = models["diffusion"]
     diffusion.to(device)
 
-    # Remember forward process of Diffusion class takes latent, context, time - all torch.Tensor
+    # Remember forward process of Diffusion class takes latent, context, time embd - all torch.Tensor
 
     timesteps = tqdm(sampler.timesteps)
     for i, timestep in enumerate(timesteps):
         # for each timestep, we donoise the image continuously
         # UNET sees the *latent* and predicts how much noise is present
-        # Scheduler removes that noise and UNET predicts noise in the remaining image
+        # Scheduler removes that noise i.e. predicts new *latents* and UNET predicts noise in this
         # We do this 'sampler.timesteps' times
+        # After these steps are over, we pass the final *latent* to the decoder
+
+        # NOTE: What exactly is the difference between get_time_embedding here and TimeEmbedding is diffusion?
+        # get_time_embedding takes in a number. Converts it to vector of size 320 by adding positional info (sines cosines )
+        # TimeEmbedding in diffusion class takes this vector of size 320, multiples size by 4 to work within the UNET
 
         # get_time_embedding converts timestep number to vector
         # (1, 320)

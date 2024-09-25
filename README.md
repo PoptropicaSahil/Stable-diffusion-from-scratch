@@ -46,7 +46,8 @@ Looks like an encoder-only model. Check the part on the left for the same.
 
 
 ## Classifier Free Guidance
-We inference the model **twice** - one by specifying the prompt and another by not specifying it i.e. unconditioned prompt. Then we combine the output of the model linearly - with a weight `cfg_scale` for how much weight to give to the prompt.
+We inference the model **twice** - one by specifying the prompt and another by not specifying it i.e. unconditioned prompt. Then we combine the output of the model linearly - with a weight `cfg_scale` for how much weight to give to the prompt. 
+> Check the `generate` function in `pipeline.py` to see how we use the formula directly
 ![alt text](readme-images/classifier-free-guidance.png)
 
 ## Architecture

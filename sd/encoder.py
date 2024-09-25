@@ -84,7 +84,8 @@ class VAE_Encoder(nn.Sequential):
     def forward(self, x:torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
         # x: (Batch_Size, Channel, Height, Width)
         # noise: (Batch_Size, out_Channels, Height/8, Width/8) 
-        # Shape of noise is same as output of encoder
+        # NOTE: Shape of noise is same as output shape of encoder (== latents shape)
+        # Only image is 'encoded', the noise is added in the end
 
 
         # run all the modules sequentially
