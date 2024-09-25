@@ -9,7 +9,7 @@ class VAE_AttentionBlock(nn.Module):
     def __init__(self, channels: int):
         super().__init__()
         self.groupnorm = nn.GroupNorm(num_groups = 32, num_channels=channels)
-        self.selfattention = SelfAttention(1, channels)
+        self.self_attention = SelfAttention(1, channels)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (Batch_Size, channels, Height, Width)
@@ -34,7 +34,7 @@ class VAE_AttentionBlock(nn.Module):
         # Self attention without mask
         # Self attention because Q, K, V all come from same input
         # (Batch_Size, Height * Width, channels) -> (Batch_Size, Height * Width, channels)
-        x = self.selfattention(x)
+        x = self.self_attention(x)
 
         # (Batch_Size, Height * Width, channels) -> (Batch_Size, channels, Height * Width)
         x = x.transpose(-1, -2)
@@ -103,6 +103,7 @@ class VAE_Decoder(nn.Sequential):
             # (Batch_Size, 512, Height / 8, Width / 8) -> (Batch_Size, 512, Height / 8, Width / 8) 
             VAE_ResidualBlock(in_channels = 512, out_channels = 512),
 
+            # NOTE: The decoder's task is to actually get the image from H/8, W/8 to original sizes!
             # (Batch_Size, 512, Height / 8, Width / 8) -> (Batch_Size, 512, Height / 4, Width / 4)
             nn.Upsample(scale_factor = 2),
 
@@ -126,6 +127,7 @@ class VAE_Decoder(nn.Sequential):
 
             nn.Conv2d(in_channels = 256, out_channels = 256, kernel_size = 3, padding = 1),
 
+            # (Batch_Size, 256, Height, Width) -> (Batch_Size, 128, Height, Width)
             VAE_ResidualBlock(in_channels = 256, out_channels = 128),
             VAE_ResidualBlock(in_channels = 128, out_channels = 128),
             VAE_ResidualBlock(in_channels = 128, out_channels = 128),

@@ -29,16 +29,18 @@ class SelfAttention(nn.Module):
         q, k, v = self.in_proj(x).chunk(3, dim = -1)
 
         # (Batch_Size, Seq_Len, Dim) -> (Batch_Size, Seq_Len, H, Dim / H) -> (Batch_Size, H, Seq_Len, Dim / H)
+        # NOTE: Observe how this is beautiful because for multi heads, we need seq_len * head_dim shaped vectors only
         q = q.view(interim_shape).transpose(1, 2)
         k = k.view(interim_shape).transpose(1, 2)
         v = v.view(interim_shape).transpose(1, 2)
         
         # (Batch_Size, H, Seq_Len, Seq_Len)
+        # (Batch_Size, H, Seq_Len, Dim / H) @ (Batch_Size, H, Dim / H, Seq_Len) -> (Batch_Size, H, Seq_Len, Seq_Len)
         weight = q @ k.transpose(-1, -2)
 
         if causal_mask:
             # Mask where upper triangle is 1s
-            # Always remember we apply mask BEFORE softmax
+            # NOTE: Always remember we apply mask BEFORE softmax
             mask = torch.ones_like(weight, dtype=torch.bool).triu(1)
 
             weight.masked_fill(mask, -torch.inf)
@@ -47,6 +49,7 @@ class SelfAttention(nn.Module):
 
         weight = F.softmax(weight, dim = -1)
 
+        # No transpose? Looks like last of weight is consumed by second-last of v (Seq_Len)
         # (Batch_Size, H, Seq_Len, Seq_Len) @ (Batch_Size, H, Seq_Len, Dim / H) -> (Batch_Size, H, Seq_Len, Dim / H)
         output = weight @ v
 
@@ -64,7 +67,7 @@ class SelfAttention(nn.Module):
    
 class CrossAttention(nn.Module):
     # very similar to SelfAttention except that query comes from a different place than keys and values 
-    # i.e. CrossAttention!
+    # i.e. CrossAttention :D
 
     def __init__(self, n_heads: int, d_embed: int, d_cross: int, in_proj_bias = True, out_proj_bias = True):
         # d_embed is for query
