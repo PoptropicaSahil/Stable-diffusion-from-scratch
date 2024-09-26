@@ -1,6 +1,10 @@
 # Coding Stable Diffusion from Scratch
 
-> Like my previous implementation, this repo is a code follow-along excercise by the [excellent tutorial](https://www.youtube.com/watch?v=ZBKpAp_6TGI) by Umar Jamil `@hkproj`. He read more than 30 papers for the 5-hour video tutorial, which is already incredible. 
+## NOTE :/
+> **STABILITY AI HAS DEPRECIATED THE MODELS NOW. The models can no longer be downloaded.**
+
+
+Like my previous implementation, this repo is a code follow-along excercise by the [excellent tutorial](https://www.youtube.com/watch?v=ZBKpAp_6TGI) by Umar Jamil `@hkproj`. He read more than 30 papers for the 5-hour video tutorial, which is already incredible. 
 
 ```bash
 To ensure the code runs, the `data` folder should have the following files 
@@ -9,7 +13,10 @@ To ensure the code runs, the `data` folder should have the following files
 - v1-5-pruned-emaonly.ckpt
 ```
 
-The files can be downloaded from the official `stable-diffusion-v1-5` repository [here](https://huggingface.co/runwayml/stable-diffusion-v1-5/tree/main/). The tokenizer files can be found in the `./tokenizer` directory
+The files can be downloaded from the official `stable-diffusion-v1-5` repository [here](https://huggingface.co/runwayml/stable-diffusion-v1-5/tree/main/). The tokenizer files can be found in the `./tokenizer` directory. \
+
+> Alternatively, you can run the bash script `download_models.sh`
+
 
 The goal of this repo is to 
 - Increase my and the reader's understanding Diffusion models 
