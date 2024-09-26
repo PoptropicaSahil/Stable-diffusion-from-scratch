@@ -1,2 +1,9 @@
-torch
-numpy
+ipykernel==6.29.5
+ipython==8.27.0
+numpy==2.0.1
+pillow==10.4.0
+tokenizers==0.20.0
+torch==2.4.0+cpu
+tqdm==4.66.5
+transformers==4.45.0
+lightning

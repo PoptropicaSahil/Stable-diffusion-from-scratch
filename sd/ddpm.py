@@ -1,7 +1,6 @@
 from email import generator
 import numpy as np
 import torch
-from zmq import device
 
 
 class DDPMSampler:
