@@ -15,6 +15,7 @@ The goal of this repo is to
 - Increase my and the reader's understanding Diffusion models 
 - Develop a visual representation as a flowchart of the entire repository. The previous flowchart on LLaMA2 gathered a lot of encouragement, so why not!
 
+## **For a demo, check to `sd/demo.ipynb`**
 
 ## What is a generative model
 A generative model learns a probability distribution of the data set such that we can then sample from the distribution to create new instances of data.
