@@ -91,12 +91,18 @@ Note the mean and variance of noise. This formula is especially helpful because 
 ![alt text](readme-images/sample-noise.png)
 
 
-## Removing noise from image
+## Removing noise from image (reverse process)
 Use formula as given in paper. 
-Latents is $x_{t}$, Noise predicted by unet is $\epsilon_{\theta}$
+Latents is $x_{t}$, Noise predicted by unet is $\epsilon_{\theta}$. 
+> The `steps` method in the `ddpm.py` implements this.
+
+> NOTE: the bars represent products. Like $\bar \alpha$ is product of all or cumulative $\alpha$ values
 ![alt text](readme-images/de-noise.png)
 
-**More info**: We need some more formulae from the paper to compute the steps in the ddpm scheduler. 
+**More info**: We need some more formulae from the paper to compute the steps in the ddpm scheduler. For reverse process, we can calculate less noisy image $x_{t-1}$ from more noisy image $x_{t}$ and original sample $x_{0}$ as by formula (6). Mean and variance are given in equation (7)
 ![alt text](readme-images/de-noise-2.png)
+
+$x_{0}$ is like original sample, according to this formula (15). \
+ $\epsilon_{\theta}(x_{t})$ is simply the predicted noise by UNET at timestep $t$
 ![alt text](readme-images/de-noise-3.png)
 

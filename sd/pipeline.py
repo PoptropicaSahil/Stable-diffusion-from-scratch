@@ -188,7 +188,7 @@ def generate(
             # Apply formula as given for cfg (check readme)
             model_output = cfg_scale * (output_cond - output_uncond) + output_uncond
 
-        # remove the noise predicted by the UNET
+        # remove the noise predicted by the UNET i.e. go from more noisy to less noisy -> reverse process
         latents = sampler.step(timestep, latents, model_output)
 
     # work of diffusion model is done
